@@ -472,19 +472,19 @@ function openPicker(start, onPick) {
 }
 // Net sokak haritası (yüksek çözünürlüklü ekranlarda @2x karo) + uydu görünümü
 function addBaseLayers(m) {
-  const street = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    maxZoom: 20, subdomains: 'abcd', attribution: '&copy; OpenStreetMap &copy; CARTO' });
+  const esri = path => 'https://server.arcgisonline.com/ArcGIS/rest/services/' + path + '/MapServer/tile/{z}/{y}/{x}';
+  const street = L.tileLayer(esri('World_Street_Map'), { maxZoom: 19, attribution: 'Esri, HERE, Garmin, &copy; OpenStreetMap' });
   const sat = L.layerGroup([
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19, attribution: 'Esri, Maxar' }),
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
-      maxZoom: 20, subdomains: 'abcd' })
+    L.tileLayer(esri('World_Imagery'), { maxZoom: 19, attribution: 'Esri, Maxar' }),
+    L.tileLayer(esri('Reference/World_Transportation'), { maxZoom: 19 }),
+    L.tileLayer(esri('Reference/World_Boundaries_and_Places'), { maxZoom: 19 })
   ]);
-  const layers = {}; layers[t('mapStreet')] = street; layers[t('mapSat')] = sat;
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' });
+  const layers = {}; layers[t('mapStreet')] = street; layers[t('mapSat')] = sat; layers['OpenStreetMap'] = osm;
   let pref = 'street'; try { pref = localStorage.getItem('rk_base') || 'street'; } catch (e) {}
-  (pref === 'sat' ? sat : street).addTo(m);
+  (pref === 'sat' ? sat : pref === 'osm' ? osm : street).addTo(m);
   L.control.layers(layers, null, { position: 'topright', collapsed: false }).addTo(m);
-  m.on('baselayerchange', e => { try { localStorage.setItem('rk_base', e.layer === sat ? 'sat' : 'street'); } catch (x) {} });
+  m.on('baselayerchange', e => { try { localStorage.setItem('rk_base', e.layer === sat ? 'sat' : e.layer === osm ? 'osm' : 'street'); } catch (x) {} });
 }
 function restaurantPos() { return restaurant.lat ? { lat: restaurant.lat, lng: restaurant.lng } : { lat: 23.588, lng: 58.3829 }; }
 
