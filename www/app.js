@@ -20,6 +20,7 @@ const T = {
     pickOnMap:'Haritada seç', address:'Adres tarifi', note:'Not', amount:'Tutar', priority:'Öncelik',
     normal:'Normal', urgent:'Acil', readyNow:'Hazır olarak ekle', save:'Kaydet', cancel:'Vazgeç', close:'Kapat',
     locOk:'Konum bulundu', locBad:'Bu linkte koordinat bulunamadı. Haritadan seçin.',
+    resolving:'Kısa link çözülüyor…',
     shortLink:'Kısa link (goo.gl) okunamıyor. Linki tarayıcıda açıp adres çubuğundaki uzun linki yapıştırın veya haritadan seçin.',
     needLoc:'Önce konumu girin.', tapMap:'Teslimat noktasına dokunun', useThis:'Bu konumu kullan',
     st_new:'Hazırlanıyor', st_ready:'Hazır', st_assigned:'Atandı', st_on_way:'Yolda', st_delivered:'Teslim edildi', st_cancelled:'İptal',
@@ -49,6 +50,7 @@ const T = {
     pickOnMap:'Pick on map', address:'Directions', note:'Note', amount:'Amount', priority:'Priority',
     normal:'Normal', urgent:'Urgent', readyNow:'Add as ready', save:'Save', cancel:'Cancel', close:'Close',
     locOk:'Location found', locBad:'No coordinates in this link. Pick on the map.',
+    resolving:'Resolving short link…',
     shortLink:'Short links (goo.gl) can\'t be read. Open it in the browser and paste the long link, or pick on the map.',
     needLoc:'Enter the location first.', tapMap:'Tap the delivery point', useThis:'Use this location',
     st_new:'Preparing', st_ready:'Ready', st_assigned:'Assigned', st_on_way:'On the way', st_delivered:'Delivered', st_cancelled:'Cancelled',
@@ -363,13 +365,29 @@ function openNewOrder() {
     '<button type="submit" class="btn primary">' + esc(t('save')) + '</button></div></form>';
   document.body.appendChild(m);
   const loc = m.querySelector('#noLoc'), msg = m.querySelector('#noLocMsg');
+  let resolving = null;
   const check = () => {
     const p = parseLocation(loc.value);
     if (p.empty) msg.textContent = '';
-    else if (p.short) msg.textContent = t('shortLink');
+    else if (p.short) { msg.textContent = t('resolving'); resolveShort(loc.value.trim()); }
     else if (p.bad) msg.textContent = t('locBad');
     else msg.textContent = '✓ ' + t('locOk') + ': ' + p.lat.toFixed(5) + ', ' + p.lng.toFixed(5);
-    msg.style.color = p.lat != null ? 'var(--ok)' : (p.empty ? '' : 'var(--bad)');
+    msg.style.color = p.lat != null ? 'var(--ok)' : (p.empty || p.short ? '' : 'var(--bad)');
+  };
+  // Kısa Google Maps linkini Supabase "resolve-link" fonksiyonu ile koordinata çevirir
+  const resolveShort = async url => {
+    if (resolving === url) return;
+    resolving = url;
+    try {
+      const { data, error } = await sb.functions.invoke('resolve-link', { body: { url } });
+      if (loc.value.trim() !== url) return;
+      if (!error && data && data.lat != null) {
+        loc.value = Number(data.lat).toFixed(6) + ',' + Number(data.lng).toFixed(6);
+        return check();
+      }
+    } catch (e) { console.warn(e); }
+    if (loc.value.trim() === url) { msg.textContent = t('shortLink'); msg.style.color = 'var(--bad)'; }
+    resolving = null;
   };
   loc.addEventListener('input', check);
   m.querySelector('#noForm').onsubmit = async e => {
