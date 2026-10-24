@@ -88,9 +88,12 @@
     const now = opts.now || Date.now();
     const maxPerTrip = opts.maxPerTrip || 3;
     const maxMin = opts.maxMin || 40;
+    const maxSpread = opts.maxSpreadKm || Infinity;
     const ctx = { maxMin, waitedMin: o => Math.max(0, (now - (o.readyAt || now)) / 60000) };
     const rt = stops => simulate(depot, bestSequence(depot, stops, ctx)).minWithReturn;
     const feasible = stops => {
+      for (let i = 0; i < stops.length; i++) for (let j = i + 1; j < stops.length; j++)
+        if (roadKm(stops[i], stops[j]) > maxSpread) return false;
       const seq = bestSequence(depot, stops, ctx), s = simulate(depot, seq);
       return seq.every((o, i) => ctx.waitedMin(o) + s.arrivals[i] <= maxMin || stops.length === 1);
     };

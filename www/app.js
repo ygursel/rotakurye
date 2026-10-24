@@ -7,6 +7,7 @@ const R = window.RKRoute;
 const MAX_TRIP = C.MAX_ORDERS_PER_TRIP || 3;
 const MAX_MIN = C.MAX_DELIVERY_MIN || 40;
 const CUR = C.CURRENCY || 'OMR';
+const MAX_SPREAD = C.MAX_SPREAD_KM || 50;
 
 /* ---------------- dil ---------------- */
 const T = {
@@ -20,6 +21,7 @@ const T = {
     pickOnMap:'Haritada seç', address:'Adres tarifi', note:'Not', amount:'Tutar', priority:'Öncelik',
     normal:'Normal', urgent:'Acil', readyNow:'Hazır olarak ekle', save:'Kaydet', cancel:'Vazgeç', close:'Kapat',
     locOk:'Konum bulundu', locBad:'Bu linkte koordinat bulunamadı. Haritadan seçin.',
+    tooFar:'Atanamadı: #{a} ile #{b} arası ~{km} km (sınır {max} km). Ters yöndeki siparişler aynı kuryeye verilemez.', tryOther:'{name} için uygun.',
     reorder:'En kısa sırayı hesapla', reordered:'Sıra güncellendi', alreadyBest:'Sıra zaten en kısa',
     resolving:'Kısa link çözülüyor…', paste:'Yapıştır', noLinkInClip:'Panoda konum linki yok. WhatsApp\'ta konuma dokunun, Google Maps\'te Paylaş > Kopyala deyin.',
     mapStreet:'Harita', mapSat:'Uydu',
@@ -52,6 +54,7 @@ const T = {
     pickOnMap:'Pick on map', address:'Directions', note:'Note', amount:'Amount', priority:'Priority',
     normal:'Normal', urgent:'Urgent', readyNow:'Add as ready', save:'Save', cancel:'Cancel', close:'Close',
     locOk:'Location found', locBad:'No coordinates in this link. Pick on the map.',
+    tooFar:'Not assigned: #{a} and #{b} are ~{km} km apart (limit {max} km). Opposite-direction orders can\'t go to the same courier.', tryOther:'{name} can take it.',
     reorder:'Recalculate best order', reordered:'Order updated', alreadyBest:'Already the best order',
     resolving:'Resolving short link…', paste:'Paste', noLinkInClip:'No location link in clipboard. Tap the location in WhatsApp, then Share > Copy in Google Maps.',
     mapStreet:'Map', mapSat:'Satellite',
@@ -251,7 +254,7 @@ function render() {
   $app.innerHTML =
     '<div class="top"><div class="brand">Rota<span>Kurye</span></div>' +
     '<div class="who">' + esc(restaurant.name) + ' · ' + esc(me.full_name) +
-    ' <span class="small">· s' + esc(window.RK_VERSION || '202610241304') + (location.host.indexOf('github.io') >= 0 ? '' : ' (yerel)') + '</span></div>' +
+    ' <span class="small">· s' + esc(window.RK_VERSION || '202610250114') + (location.host.indexOf('github.io') >= 0 ? '' : ' (yerel)') + '</span></div>' +
     langBtn() + '<button class="btn small" data-act="signout">' + esc(t('signOut')) + '</button></div>' +
     tabs + '<div id="content"></div>';
   renderContent();
@@ -329,7 +332,7 @@ function computeSuggest() {
   const depot = { lat: restaurant.lat, lng: restaurant.lng };
   const batches = R.planBatches(depot, ready.map(o => ({
     id: o.id, lat: o.lat, lng: o.lng, priority: o.priority, readyAt: new Date(o.ready_at || o.created_at).getTime()
-  })), { now: Date.now(), maxPerTrip: MAX_TRIP, maxMin: MAX_MIN });
+  })), { now: Date.now(), maxPerTrip: MAX_TRIP, maxMin: MAX_MIN, maxSpreadKm: MAX_SPREAD });
   const free = couriers.filter(c => !activeOf(c.id).length);
   batches.forEach((b, i) => { b.courier = free[i] ? free[i].id : ''; });
   return batches;
@@ -350,8 +353,23 @@ function suggestView() {
   });
   return h;
 }
+// Aynı kuryede birbirinden MAX_SPREAD km'den uzak iki sipariş olmasın
+function spreadConflict(ids, courierId) {
+  const next = activeOf(courierId).concat(ids.map(id => orders.find(o => o.id === id)).filter(Boolean));
+  for (let i = 0; i < next.length; i++) for (let j = i + 1; j < next.length; j++) {
+    const km = R.roadKm(next[i], next[j]);
+    if (km > MAX_SPREAD) return { a: next[i], b: next[j], km };
+  }
+  return null;
+}
 async function assignOrders(ids, courierId) {
   if (!courierId) return toast(t('chooseCourier'));
+  const c = spreadConflict(ids, courierId);
+  if (c) {
+    const other = couriers.find(x => x.id !== courierId && !spreadConflict(ids, x.id));
+    return toast(t('tooFar').replace('{a}', c.a.id).replace('{b}', c.b.id).replace('{km}', Math.round(c.km)).replace('{max}', MAX_SPREAD) +
+      (other ? ' ' + t('tryOther').replace('{name}', other.full_name) : ''), 7000);
+  }
   const base = activeOf(courierId).length;
   const res = await Promise.all(ids.map((id, i) => sb.from('orders').update({
     status: 'assigned', courier_id: courierId, seq: base + i + 1, assigned_at: nowIso()
