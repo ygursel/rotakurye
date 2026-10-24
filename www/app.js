@@ -160,7 +160,7 @@ function showLogin(err) {
     e.preventDefault();
     const { data, error } = await sb.auth.signInWithPassword({
       email: document.getElementById('lEmail').value.trim(), password: document.getElementById('lPass').value });
-    if (error) return showLogin(t('loginFail'));
+    if (error) return showLogin(t('loginFail') + ' (' + (error.message || error.status || error) + ')');
     await afterLogin(data.user);
   };
 }
