@@ -20,6 +20,7 @@ const T = {
     pickOnMap:'Haritada seç', address:'Adres tarifi', note:'Not', amount:'Tutar', priority:'Öncelik',
     normal:'Normal', urgent:'Acil', readyNow:'Hazır olarak ekle', save:'Kaydet', cancel:'Vazgeç', close:'Kapat',
     locOk:'Konum bulundu', locBad:'Bu linkte koordinat bulunamadı. Haritadan seçin.',
+    reorder:'En kısa sırayı hesapla', reordered:'Sıra güncellendi', alreadyBest:'Sıra zaten en kısa',
     resolving:'Kısa link çözülüyor…', paste:'Yapıştır', noLinkInClip:'Panoda konum linki yok. WhatsApp\'ta konuma dokunun, Google Maps\'te Paylaş > Kopyala deyin.',
     mapStreet:'Harita', mapSat:'Uydu',
     shortLink:'Kısa link (goo.gl) okunamıyor. Linki tarayıcıda açıp adres çubuğundaki uzun linki yapıştırın veya haritadan seçin.',
@@ -51,6 +52,7 @@ const T = {
     pickOnMap:'Pick on map', address:'Directions', note:'Note', amount:'Amount', priority:'Priority',
     normal:'Normal', urgent:'Urgent', readyNow:'Add as ready', save:'Save', cancel:'Cancel', close:'Close',
     locOk:'Location found', locBad:'No coordinates in this link. Pick on the map.',
+    reorder:'Recalculate best order', reordered:'Order updated', alreadyBest:'Already the best order',
     resolving:'Resolving short link…', paste:'Paste', noLinkInClip:'No location link in clipboard. Tap the location in WhatsApp, then Share > Copy in Google Maps.',
     mapStreet:'Map', mapSat:'Satellite',
     shortLink:'Short links (goo.gl) can\'t be read. Open it in the browser and paste the long link, or pick on the map.',
@@ -355,7 +357,25 @@ async function assignOrders(ids, courierId) {
   }).eq('id', id)));
   const err = res.find(r => r.error); if (err) return fail(err.error);
   toast(t('assigned') + ': ' + courierName(courierId));
-  await loadOrders(); if (ui.suggest) ui.suggest = computeSuggest(); renderContent();
+  await loadOrders(); await resequence(courierId); if (ui.suggest) ui.suggest = computeSuggest(); renderContent();
+}
+
+/* Kuryenin bekleyen tüm siparişlerini en kısa/ en hızlı sıraya dizer.
+   Başlangıç: paketler henüz alınmadıysa restoran, yoldaysa kuryenin son konumu. */
+async function resequence(courierId, fromPos) {
+  const list = activeOf(courierId);
+  if (!list.length) return false;
+  const onRoad = list.some(o => o.status === 'on_way');
+  const l = locs[courierId];
+  const start = fromPos || (onRoad && l ? { lat: l.lat, lng: l.lng } : restaurantPos());
+  const ctx = { maxMin: MAX_MIN, waitedMin: o => minsSince(o.ready_at || o.created_at) };
+  const seq = R.bestSequence(start, list, ctx);
+  const changes = seq.map((o, i) => ({ o, n: i + 1 })).filter(x => x.o.seq !== x.n);
+  if (!changes.length) return false;
+  const res = await Promise.all(changes.map(x => sb.from('orders').update({ seq: x.n }).eq('id', x.o.id)));
+  const err = res.find(r => r.error); if (err) { fail(err.error); return false; }
+  await loadOrders();
+  return true;
 }
 
 /* ---------- yönetici: yeni sipariş ---------- */
@@ -593,6 +613,7 @@ function courierView() {
 
   const waiting = list.filter(o => o.status === 'assigned');
   if (waiting.length) h += '<button class="btn primary block" data-act="pickedUp" style="margin-bottom:10px;min-height:52px">' + esc(t('pickedUp')) + '</button>';
+  if (list.length > 1) h += '<button class="btn block" data-act="reorder" style="margin-bottom:10px">🔄 ' + esc(t('reorder')) + '</button>';
 
   // Tahmini varış: kuryenin şu anki konumundan (yoksa restorandan) sırayla
   const from = myPos || restaurantPos();
@@ -696,7 +717,12 @@ document.addEventListener('click', async e => {
       return assignOrders([id], sel.value);
     }
     if (act === 'ready') return update(id, { status: 'ready', ready_at: nowIso() });
-    if (act === 'unassign') return update(id, { status: 'ready', courier_id: null, seq: null, assigned_at: null });
+    if (act === 'unassign') {
+      const cid = (orders.find(o => o.id === id) || {}).courier_id;
+      await update(id, { status: 'ready', courier_id: null, seq: null, assigned_at: null });
+      if (cid && await resequence(cid)) renderContent();
+      return;
+    }
     if (act === 'cancel') { if (!window.confirm(t('confirmCancel'))) return; return update(id, { status: 'cancelled' }); }
     if (act === 'setRest') { ui.pickRestaurant = !ui.pickRestaurant; b.textContent = ui.pickRestaurant ? t('tapRestaurant') : t('setRestaurant'); return; }
     if (act === 'shift') {
@@ -710,8 +736,9 @@ document.addEventListener('click', async e => {
       const res = await Promise.all(ids.map(x => sb.from('orders').update({ status: 'on_way', picked_at: ts }).eq('id', x)));
       const err = res.find(r => r.error); if (err) return fail(err.error);
       if (!shiftIsOn()) { setShift(true); startTracking(); }
-      await loadOrders(); return renderContent();
+      await loadOrders(); await resequence(me.id, myPos || undefined); return renderContent();
     }
+    if (act === 'reorder') { const ch = await resequence(me.id, myPos || undefined); toast(ch ? t('reordered') : t('alreadyBest')); return renderContent(); }
     if (act === 'deliver') { await update(id, { status: 'delivered', delivered_at: nowIso() }); toast(t('deliveredMsg')); return; }
   } catch (err) { fail(err); }
 });
