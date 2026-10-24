@@ -1,0 +1,11 @@
+{
+  "appId": "com.rotakurye.app",
+  "appName": "RotaKurye",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "useLegacyBridge": true
+  }
+}
