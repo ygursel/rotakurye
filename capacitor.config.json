@@ -4,7 +4,8 @@
   "webDir": "www",
   "server": {
     "androidScheme": "https",
-    "url": "https://ygursel.github.io/rotakurye/"
+    "url": "https://ygursel.github.io/rotakurye/",
+    "errorPath": "index.html"
   },
   "android": {
     "useLegacyBridge": true

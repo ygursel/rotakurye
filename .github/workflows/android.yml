@@ -20,6 +20,11 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      - name: Sabit imza anahtarını kullan (güncellemeler eski uygulamanın üstüne kurulabilsin)
+        run: |
+          mkdir -p ~/.android
+          cp android-signing/debug.keystore ~/.android/debug.keystore
+
       - name: Paketleri kur
         run: npm install --legacy-peer-deps
 
