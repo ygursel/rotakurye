@@ -3,7 +3,8 @@
   "appName": "RotaKurye",
   "webDir": "www",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "url": "https://ygursel.github.io/rotakurye/"
   },
   "android": {
     "useLegacyBridge": true

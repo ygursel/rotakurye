@@ -20,7 +20,8 @@ const T = {
     pickOnMap:'Haritada seç', address:'Adres tarifi', note:'Not', amount:'Tutar', priority:'Öncelik',
     normal:'Normal', urgent:'Acil', readyNow:'Hazır olarak ekle', save:'Kaydet', cancel:'Vazgeç', close:'Kapat',
     locOk:'Konum bulundu', locBad:'Bu linkte koordinat bulunamadı. Haritadan seçin.',
-    resolving:'Kısa link çözülüyor…',
+    resolving:'Kısa link çözülüyor…', paste:'Yapıştır', noLinkInClip:'Panoda konum linki yok. WhatsApp\'ta konuma dokunun, Google Maps\'te Paylaş > Kopyala deyin.',
+    mapStreet:'Harita', mapSat:'Uydu',
     shortLink:'Kısa link (goo.gl) okunamıyor. Linki tarayıcıda açıp adres çubuğundaki uzun linki yapıştırın veya haritadan seçin.',
     needLoc:'Önce konumu girin.', tapMap:'Teslimat noktasına dokunun', useThis:'Bu konumu kullan',
     st_new:'Hazırlanıyor', st_ready:'Hazır', st_assigned:'Atandı', st_on_way:'Yolda', st_delivered:'Teslim edildi', st_cancelled:'İptal',
@@ -50,7 +51,8 @@ const T = {
     pickOnMap:'Pick on map', address:'Directions', note:'Note', amount:'Amount', priority:'Priority',
     normal:'Normal', urgent:'Urgent', readyNow:'Add as ready', save:'Save', cancel:'Cancel', close:'Close',
     locOk:'Location found', locBad:'No coordinates in this link. Pick on the map.',
-    resolving:'Resolving short link…',
+    resolving:'Resolving short link…', paste:'Paste', noLinkInClip:'No location link in clipboard. Tap the location in WhatsApp, then Share > Copy in Google Maps.',
+    mapStreet:'Map', mapSat:'Satellite',
     shortLink:'Short links (goo.gl) can\'t be read. Open it in the browser and paste the long link, or pick on the map.',
     needLoc:'Enter the location first.', tapMap:'Tap the delivery point', useThis:'Use this location',
     st_new:'Preparing', st_ready:'Ready', st_assigned:'Assigned', st_on_way:'On the way', st_delivered:'Delivered', st_cancelled:'Cancelled',
@@ -112,6 +114,17 @@ function parseLocation(text) {
     }
   }
   return { bad: true };
+}
+const shortUrlIn = s => { const m = String(s || '').match(/https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)\/[^\s]+/i); return m ? m[0] : ''; };
+const isLocText = s => { const p = parseLocation(s); return p.lat != null || !!p.short; };
+const isNative = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+async function readClipboard(userAsked) {
+  try {
+    const CB = isNative() && window.Capacitor.Plugins && window.Capacitor.Plugins.Clipboard;
+    if (CB) { const r = await CB.read(); return (r && r.value) || ''; }
+    if (userAsked && navigator.clipboard && navigator.clipboard.readText) return await navigator.clipboard.readText();
+  } catch (e) { console.warn(e); }
+  return '';
 }
 // Umman numarası: 8 haneli ise 968 ekle
 function waNumber(p) {
@@ -355,7 +368,8 @@ function openNewOrder() {
     '<label>' + esc(t('phone')) + '<input id="noPhone" type="tel" inputmode="tel"></label></div>' +
     '<label>' + esc(t('location')) + '<textarea id="noLoc" placeholder="' + esc(t('locHint')) + '"></textarea></label>' +
     '<div class="row" style="align-items:center"><div id="noLocMsg" class="small muted"></div>' +
-    '<button type="button" class="btn small" data-act="pickOrder" style="flex:0 0 auto">' + esc(t('pickOnMap')) + '</button></div>' +
+    '<button type="button" class="btn small" id="noPaste" style="flex:0 0 auto">📋 ' + esc(t('paste')) + '</button>' +
+    '<button type="button" class="btn small" data-act="pickOrder" style="flex:0 0 auto">🗺️ ' + esc(t('pickOnMap')) + '</button></div>' +
     '<label>' + esc(t('address')) + '<input id="noAddr"></label>' +
     '<label>' + esc(t('note')) + '<input id="noNote"></label>' +
     '<div class="row"><label>' + esc(t('amount')) + ' (' + CUR + ')<input id="noAmt" type="number" step="0.001" inputmode="decimal"></label>' +
@@ -369,7 +383,7 @@ function openNewOrder() {
   const check = () => {
     const p = parseLocation(loc.value);
     if (p.empty) msg.textContent = '';
-    else if (p.short) { msg.textContent = t('resolving'); resolveShort(loc.value.trim()); }
+    else if (p.short) { msg.textContent = t('resolving'); resolveShort(shortUrlIn(loc.value)); }
     else if (p.bad) msg.textContent = t('locBad');
     else msg.textContent = '✓ ' + t('locOk') + ': ' + p.lat.toFixed(5) + ', ' + p.lng.toFixed(5);
     msg.style.color = p.lat != null ? 'var(--ok)' : (p.empty || p.short ? '' : 'var(--bad)');
@@ -380,16 +394,19 @@ function openNewOrder() {
     resolving = url;
     try {
       const { data, error } = await sb.functions.invoke('resolve-link', { body: { url } });
-      if (loc.value.trim() !== url) return;
+      if (shortUrlIn(loc.value) !== url) return;
       if (!error && data && data.lat != null) {
         loc.value = Number(data.lat).toFixed(6) + ',' + Number(data.lng).toFixed(6);
         return check();
       }
     } catch (e) { console.warn(e); }
-    if (loc.value.trim() === url) { msg.textContent = t('shortLink'); msg.style.color = 'var(--bad)'; }
+    if (shortUrlIn(loc.value) === url) { msg.textContent = t('shortLink'); msg.style.color = 'var(--bad)'; }
     resolving = null;
   };
   loc.addEventListener('input', check);
+  const fillFrom = txt => { if (txt && isLocText(txt)) { loc.value = txt.trim(); check(); return true; } return false; };
+  m.querySelector('#noPaste').onclick = async () => { if (!fillFrom(await readClipboard(true))) toast(t('noLinkInClip')); };
+  if (isNative()) readClipboard(false).then(fillFrom);   // uygulamada: panodaki konum linkini kendiliğinden al
   m.querySelector('#noForm').onsubmit = async e => {
     e.preventDefault();
     const p = parseLocation(loc.value);
@@ -422,8 +439,8 @@ function openPicker(start, onPick) {
     '<button class="btn" data-act="closeModal">' + esc(t('cancel')) + '</button>' +
     '<button class="btn primary" id="pickUse" disabled>' + esc(t('useThis')) + '</button></div></div>';
   document.body.appendChild(m);
-  const pm = L.map(m.querySelector('#pickMap')).setView([start.lat, start.lng], 14);
-  tiles().addTo(pm);
+  const pm = L.map(m.querySelector('#pickMap')).setView([start.lat, start.lng], 15);
+  addBaseLayers(pm);
   let mk = null, pos = null;
   pm.on('click', e => {
     pos = { lat: e.latlng.lat, lng: e.latlng.lng };
@@ -433,10 +450,21 @@ function openPicker(start, onPick) {
   m.querySelector('#pickUse').onclick = () => { m.remove(); onPick(pos); };
   setTimeout(() => pm.invalidateSize(), 50);
 }
-function tiles() {
-  return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap'
-  });
+// Net sokak haritası (yüksek çözünürlüklü ekranlarda @2x karo) + uydu görünümü
+function addBaseLayers(m) {
+  const street = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20, subdomains: 'abcd', attribution: '&copy; OpenStreetMap &copy; CARTO' });
+  const sat = L.layerGroup([
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, attribution: 'Esri, Maxar' }),
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
+      maxZoom: 20, subdomains: 'abcd' })
+  ]);
+  const layers = {}; layers[t('mapStreet')] = street; layers[t('mapSat')] = sat;
+  let pref = 'street'; try { pref = localStorage.getItem('rk_base') || 'street'; } catch (e) {}
+  (pref === 'sat' ? sat : street).addTo(m);
+  L.control.layers(layers, null, { position: 'topright', collapsed: false }).addTo(m);
+  m.on('baselayerchange', e => { try { localStorage.setItem('rk_base', e.layer === sat ? 'sat' : 'street'); } catch (x) {} });
 }
 function restaurantPos() { return restaurant.lat ? { lat: restaurant.lat, lng: restaurant.lng } : { lat: 23.588, lng: 58.3829 }; }
 
@@ -450,7 +478,7 @@ function destroyMap() { if (map) { map.remove(); map = null; mapLayer = null; } 
 function initAdminMap() {
   destroyMap();
   map = L.map('liveMap').setView([restaurantPos().lat, restaurantPos().lng], 13);
-  tiles().addTo(map);
+  addBaseLayers(map);
   mapLayer = L.layerGroup().addTo(map);
   map.on('click', async e => {
     if (!ui.pickRestaurant) return;
