@@ -251,7 +251,7 @@ function render() {
   $app.innerHTML =
     '<div class="top"><div class="brand">Rota<span>Kurye</span></div>' +
     '<div class="who">' + esc(restaurant.name) + ' · ' + esc(me.full_name) +
-    ' <span class="small">· s' + esc(window.RK_VERSION || '?') + (location.host.indexOf('github.io') >= 0 ? '' : ' (yerel)') + '</span></div>' +
+    ' <span class="small">· s' + esc(window.RK_VERSION || '202610241304') + (location.host.indexOf('github.io') >= 0 ? '' : ' (yerel)') + '</span></div>' +
     langBtn() + '<button class="btn small" data-act="signout">' + esc(t('signOut')) + '</button></div>' +
     tabs + '<div id="content"></div>';
   renderContent();
