@@ -8,6 +8,6 @@ window.ROTA_CONFIG = {
   // Sefer kuralları
   MAX_ORDERS_PER_TRIP: 3,   // bir kurye tek seferde en fazla kaç paket
   MAX_DELIVERY_MIN: 40,     // sipariş hazır olduktan sonra en geç kaç dakikada teslim
-  MAX_SPREAD_KM: 50,        // aynı kuryedeki iki sipariş arası en fazla kaç km olabilir
+  MAX_SPREAD_KM: 25,        // aynı kuryedeki iki sipariş arası en fazla kaç km olabilir
   CURRENCY: 'OMR'
 };
