@@ -120,7 +120,7 @@ function parseLocation(text) {
   }
   return { bad: true };
 }
-const shortUrlIn = s => { const m = String(s || '').match(/https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)\/[^\s]+/i); return m ? m[0] : ''; };
+const shortUrlIn = s => { const m = String(s || '').match(/https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)\/[A-Za-z0-9_-]+/i); return m ? m[0] : ''; };
 const isLocText = s => { const p = parseLocation(s); return p.lat != null || !!p.short; };
 const isNative = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 async function readClipboard(userAsked) {
@@ -254,7 +254,7 @@ function render() {
   $app.innerHTML =
     '<div class="top"><div class="brand">Rota<span>Kurye</span></div>' +
     '<div class="who">' + esc(restaurant.name) + ' · ' + esc(me.full_name) +
-    ' <span class="small">· s' + esc(window.RK_VERSION || '202610250116') + (location.host.indexOf('github.io') >= 0 ? '' : ' (yerel)') + '</span></div>' +
+    ' <span class="small">· s' + esc(window.RK_VERSION || '202610300312') + (location.host.indexOf('github.io') >= 0 ? '' : ' (yerel)') + '</span></div>' +
     langBtn() + '<button class="btn small" data-act="signout">' + esc(t('signOut')) + '</button></div>' +
     tabs + '<div id="content"></div>';
   renderContent();
