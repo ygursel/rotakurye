@@ -120,7 +120,7 @@ function parseLocation(text) {
   }
   return { bad: true };
 }
-const shortUrlIn = s => { const m = String(s || '').match(/https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)\/[A-Za-z0-9_-]+/i); return m ? m[0] : ''; };
+const shortUrlIn = s => { const m = String(s || '').match(/https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)\/[A-Za-z0-9_-]+?(?=https?:|[^A-Za-z0-9_-]|$)/i); return m ? m[0] : ''; };
 const isLocText = s => { const p = parseLocation(s); return p.lat != null || !!p.short; };
 const isNative = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 async function readClipboard(userAsked) {
